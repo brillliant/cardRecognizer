@@ -19,6 +19,8 @@ public class TemplateCutter {
     static int suitWidth = 33;
 
     public static void main(String[] args) throws Exception {
+        boolean saveAll = true;
+
         File inputFolder = new File("inputForTemplates");
         File outputRankFolder = new File("templates/rank");
         File outputSuitFolder = new File("templates/suit");
@@ -29,6 +31,8 @@ public class TemplateCutter {
 
         Set<String> savedRanks = new HashSet<>();
         Set<Character> savedSuits = new HashSet<>();
+        Map<String, Integer> rankCounters = new HashMap<>();
+        Map<Character, Integer> suitCounters = new HashMap<>();
 
         File[] files = inputFolder.listFiles((dir, name) -> name.endsWith(".png"));
         if (files == null || files.length == 0) {
@@ -58,25 +62,45 @@ public class TemplateCutter {
                 String color = getRankColor(rankImage);
                 String rankKey = rank + "-" + color;
 
-                if (!savedRanks.contains(rankKey)) {
-                    File outRank = new File(outputRankFolder, rankKey + ".png");
+                if (saveAll) {
+                    int count = rankCounters.getOrDefault(rankKey, 0) + 1;
+                    rankCounters.put(rankKey, count);
+                    File outRank = new File(outputRankFolder, rankKey + "-" + count + ".png");
                     ImageIO.write(rankImage, "png", outRank);
-                    savedRanks.add(rankKey);
-                    System.out.println("✅ Сохранён rank: " + rankKey + ".png");
+                    System.out.println("✅ Сохранён rank: " + outRank.getName());
+                } else {
+                    if (!savedRanks.contains(rankKey)) {
+                        File outRank = new File(outputRankFolder, rankKey + ".png");
+                        ImageIO.write(rankImage, "png", outRank);
+                        savedRanks.add(rankKey);
+                        System.out.println("✅ Сохранён rank: " + rankKey + ".png");
+                    }
                 }
 
                 // Вырезаем изображение масти
-                if (!savedSuits.contains(suit)) {
+                if (saveAll) {
+                    int count = suitCounters.getOrDefault(suit, 0) + 1;
+                    suitCounters.put(suit, count);
+                    File outSuit = new File(outputSuitFolder, suit + "-" + count + ".png");
                     BufferedImage suitImage = original.getSubimage(x + suitOffsetX, startY + suitOffsetY, suitWidth, suitHeight);
-                    File outSuit = new File(outputSuitFolder, suit + ".png");
                     ImageIO.write(suitImage, "png", outSuit);
-                    savedSuits.add(suit);
-                    System.out.println("✅ Сохранён suit: " + suit + ".png");
+                    System.out.println("✅ Сохранён suit: " + outSuit.getName());
+                } else {
+                    if (!savedSuits.contains(suit)) {
+                        BufferedImage suitImage = original.getSubimage(x + suitOffsetX, startY + suitOffsetY, suitWidth, suitHeight);
+                        File outSuit = new File(outputSuitFolder, suit + ".png");
+                        ImageIO.write(suitImage, "png", outSuit);
+                        savedSuits.add(suit);
+                        System.out.println("✅ Сохранён suit: " + suit + ".png");
+                    }
                 }
             }
         }
 
-        System.out.println("\n🎉 Готово. Уникальных рангов: " + savedRanks.size() + ", мастей: " + savedSuits.size());
+        System.out.println("\n🎉 Готово. " +
+                (saveAll
+                        ? "Сохранены все шаблоны"
+                        : "Уникальных рангов: " + savedRanks.size() + ", мастей: " + savedSuits.size()));
     }
 
     static String getRankColor(BufferedImage image) {
@@ -91,8 +115,8 @@ public class TemplateCutter {
                 int g = color.getGreen();
                 int b = color.getBlue();
 
-                if (r > 100 && g < 80 && b < 80) red++;     // тёплые оттенки
-                else if (r < 100 && g < 100 && b < 100) black++; // тёмные оттенки
+                if (r > 100 && g < 80 && b < 80) red++;
+                else if (r < 100 && g < 100 && b < 100) black++;
             }
         }
 

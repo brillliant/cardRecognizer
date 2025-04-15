@@ -7,14 +7,22 @@ import java.io.File;
 import java.util.*;
 
 public class Main {
-    static Map<String, BufferedImage> templates = new HashMap<>();
+    static Map<String, BufferedImage> rankTemplates = new HashMap<>();
+    static Map<String, BufferedImage> suitTemplates = new HashMap<>();
+
+    static int startX = 147;
+    static int startY = 591;
+    static int cardWidth = 53;
+    static int shift = 72;
+
+    static int rankHeight = 27;
+    static int suitOffsetY = 41;
+    static int suitOffsetX = 20;
+    static int suitHeight = 35;
+    static int suitWidth = 33;
 
     public static void main(String[] args) throws Exception {
-        String path = null;
-        if (args.length < 1) {
-            path = "checkFolder";            //System.out.println("Укажите путь к папке с изображениями");
-            //return;
-        }
+        String path = args.length > 0 ? args[0] : "checkFolder";
 
         loadTemplates();
 
@@ -26,82 +34,94 @@ public class Main {
             return;
         }
 
-        //temp
-        int problem_not_found = 0;
-        int problem_false_found = 0;
-        int common_problem = 0;
+        int problems = 0;
 
         for (File file : files) {
             BufferedImage img = ImageIO.read(file);
             String result = recognizeCards(img);
-            if (!file.getName().equals(result.replace("_grey","").replace("_dark","") + ".png")) {
-                System.out.println("=== ПРОБЛЕМА ====== Не совпало");
-                common_problem++;
+            String expected = file.getName().replace(".png", "");//.replace("_grey", "").replace("_dark", "");
+
+            if (!result
+                    .replace("_gray", "")
+                    .replace("_dark", "")
+                    .replace("-red", "")
+                    .replace("-black", "")
+                    .equals(expected)) {
+                System.out.println("=== ❌ ПРОБЛЕМА ===");
+                problems++;
             }
-            System.out.println(file.getName() + " - " + result);
+            System.out.println(file.getName() + " -> " + result
+                    .replace("_gray", "")
+                    .replace("_dark", "")
+                    .replace("-red", "")
+                    .replace("-black", "") + "      " + result);
         }
-        //System.out.println("================ НЕ НАШЛО:" + problem_not_found + "   ЛОЖНОЕ:" + problem_false_found);
-        System.out.println("================ ПРОБЛЕМ:" + common_problem);
+
+        System.out.println("\n================ ПРОБЛЕМ: " + problems);
     }
 
     static void loadTemplates() throws Exception {
-        File tmplDir = new File("templates");
-        for (File f : tmplDir.listFiles()) {
-            if (f.getName().endsWith(".png")) {
-                String name = f.getName().replace(".png", "");
-                templates.put(name, ImageIO.read(f));
-            }
+        File rankDir = new File("templates/rank");
+        for (File f : rankDir.listFiles((d, n) -> n.endsWith(".png"))) {
+            String name = f.getName().replace(".png", "");
+            rankTemplates.put(name, ImageIO.read(f));
+        }
+
+        File suitDir = new File("templates/suit");
+        for (File f : suitDir.listFiles((d, n) -> n.endsWith(".png"))) {
+            String name = f.getName().replace(".png", "");
+            suitTemplates.put(name, ImageIO.read(f));
         }
     }
 
-    static String recognizeCards(BufferedImage img) {
-        //int w = img.getWidth();
-        //int h = img.getHeight();
-        //int y = h / 3;
-        int cardWidth = 53;//w / 8;
-        int cardHeight = 76;//w / 8;
-        int shift = 72;//73-34mln;74-62mln;75-88mln;                                         //70-40млн; 71-9млн; 72-4млн; 73-34млн; 74-63млн              //old 65, 68, 70  75!, 73, 74! 72:)  71!
-
-        int x = 147;
-        int y = 591;
-
+    static String recognizeCards(BufferedImage img) throws Exception {
         StringBuilder result = new StringBuilder();
 
         for (int i = 0; i < 5; i++) {
-            //if (x + cardWidth > w) break;
+            int x = startX + i * shift;
 
-            BufferedImage sub = img.getSubimage(x + i * shift, y, cardWidth, cardHeight);
-            String bestMatch = findBestMatch(sub);
-            if (bestMatch != null) result.append(bestMatch);
+            if (x + cardWidth > img.getWidth()) break;
+
+            BufferedImage rankImg = img.getSubimage(x, startY, cardWidth, rankHeight);
+            BufferedImage suitImg = img.getSubimage(x + suitOffsetX, startY + suitOffsetY, suitWidth, suitHeight);
+
+            String bestRank = findBestMatch(rankImg, rankTemplates, 15000.0);
+            String bestSuit = findBestMatch(suitImg, suitTemplates, 15000.0);
+
+            if (bestRank != null && bestSuit != null) {
+                result.append(bestRank).append(bestSuit);
+            } /*else {
+                result.append("??");
+            }*/
         }
 
         return result.toString();
     }
 
-    static String findBestMatch(BufferedImage image) {
-        String best = null;
+    static String findBestMatch(BufferedImage image, Map<String, BufferedImage> templates, double threshold) throws Exception {
+        String bestMatch = null;
         double minDiff = Double.MAX_VALUE;
 
-        //todo temp
-        List<Map.Entry<String, BufferedImage>> sortedTemplates = new ArrayList<>(templates.entrySet());
-        sortedTemplates.sort(Map.Entry.comparingByKey());
+        //temp
+        //saveImage(image, "png", new File("image.png"));
 
         for (Map.Entry<String, BufferedImage> entry : templates.entrySet()) {
-            BufferedImage template = entry.getValue();
+            //temp
+            //saveImage(entry.getValue(), "png", new File("template.png"));
 
-/*            BufferedImage normImage = normalizeImage(image);
-            BufferedImage normTemplate = normalizeImage(template);*/
-
-            double diff = imageDiff(image, template);
-            if (diff < minDiff) {
-                if (diff < 8450) {  //7450 - 53проблемы//15766 threshhold
-                    minDiff = diff;
-                    best = entry.getKey();
-                }
+            double diff = imageDiff(image, entry.getValue());
+            if (diff < minDiff && diff < threshold) {
+                minDiff = diff;
+                bestMatch = entry.getKey();
             }
         }
 
-        return best;
+        //temp
+        if (bestMatch == null) {
+            saveImage(image, "png", new File("image.png"));
+        }
+
+        return bestMatch;
     }
 
     static double imageDiff(BufferedImage image, BufferedImage template) {
@@ -111,50 +131,22 @@ public class Main {
 
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
-                Color colorImage = new Color(image.getRGB(x, y));
-                Color colorTemplate = new Color(template.getRGB(x, y));
-                int dr = colorImage.getRed() - colorTemplate.getRed();
-                int dg = colorImage.getGreen() - colorTemplate.getGreen();
-                int db = colorImage.getBlue() - colorTemplate.getBlue();
-                total += dr*dr + dg*dg + db*dg;
-
-/*                int grayImage = (colorImage.getRed() + colorImage.getGreen() + colorImage.getBlue()) / 3;
-                int grayTemplate = (colorTemplate.getRed() + colorTemplate.getGreen() + colorTemplate.getBlue()) / 3;
-                int diff = grayImage - grayTemplate;
-                total += diff * diff;*/
+                Color c1 = new Color(image.getRGB(x, y));
+                Color c2 = new Color(template.getRGB(x, y));
+                int dr = c1.getRed() - c2.getRed();
+                int dg = c1.getGreen() - c2.getGreen();
+                int db = c1.getBlue() - c2.getBlue();
+                total += dr * dr + dg * dg + db * db;
             }
         }
 
         return total / (w * h);
     }
 
-    static BufferedImage normalizeImage(BufferedImage img) {
-        int w = img.getWidth();
-        int h = img.getHeight();
-        BufferedImage norm = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
-
-        int min = 255, max = 0;
-
-        int[][] gray = new int[w][h];
-
-        for (int x = 0; x < w; x++) {
-            for (int y = 0; y < h; y++) {
-                Color color = new Color(img.getRGB(x, y));
-                int g = (color.getRed() + color.getGreen() + color.getBlue()) / 3;
-                gray[x][y] = g;
-                if (g < min) min = g;
-                if (g > max) max = g;
-            }
+    //todo temp for debug
+    static void saveImage(BufferedImage image, String format, File outputFile) throws Exception {
+        if (!ImageIO.write(image, format, outputFile)) {
+            throw new Exception("❌ Ошибка сохранения изображения: " + outputFile.getAbsolutePath());
         }
-
-        for (int x = 0; x < w; x++) {
-            for (int y = 0; y < h; y++) {
-                int normG = (gray[x][y] - min) * 255 / (max - min + 1); // +1 чтобы избежать деления на 0
-                int rgb = new Color(normG, normG, normG).getRGB();
-                norm.setRGB(x, y, rgb);
-            }
-        }
-
-        return norm;
     }
 }
