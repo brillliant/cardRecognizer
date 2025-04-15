@@ -1,4 +1,4 @@
-package com.my.buyrecipes;
+package com.my.test;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
